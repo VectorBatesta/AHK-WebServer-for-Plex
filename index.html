@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      height: 100%;
+      overflow: hidden;
+      background: #f0f0f0;
+    }
+    /* The container is rotated 90º for easier phone control */
+    .container {
+      width: 100vh;  /* viewport height becomes the width */
+      height: 100vw; /* viewport width becomes the height */
+      transform: rotate(90deg);
+      transform-origin: center center;
+      position: absolute;
+      top: 0;
+      left: 0;
+      display: flex;
+      flex-direction: column;
+    }
+    /* Main area (85% height) for left/right and previous/next buttons */
+    .main {
+      flex: 0 0 85%;
+      display: flex;
+      width: 100%;
+    }
+    .left-panel {
+      width: 80%;
+      display: flex;
+      flex-direction: column;
+    }
+    .left-panel button {
+      flex: 1;
+      font-size: 2em;
+      margin: 5px;
+    }
+    .right-panel {
+      width: 20%;
+      display: flex;
+      flex-direction: column;
+    }
+    .right-panel button {
+      flex: 1;
+      font-size: 1.5em;
+      margin: 5px;
+    }
+    /* Bottom area (15% height) for the pause button */
+    .pause {
+      flex: 0 0 15%;
+      margin: 5px;
+    }
+    .pause button {
+      width: 100%;
+      height: 100%;
+      font-size: 2em;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="main">
+      <div class="left-panel">
+        <button onclick="sendKey('left')">Left</button>
+        <button onclick="sendKey('right')">Right</button>
+      </div>
+      <div class="right-panel">
+        <button onclick="sendKey('prev')">Previous Episode</button>
+        <button onclick="sendKey('next')">Next Episode</button>
+      </div>
+    </div>
+    <div class="pause">
+      <button onclick="sendKey('pause')">Pause</button>
+    </div>
+  </div>
+  <script>
+    function sendKey(key) {
+      fetch("http://192.168.200.100:8080/" + key)
+        .then(response => response.text())
+        .then(data => console.log(data))
+        .catch(error => console.error("Error:", error));
+    }
+  </script>
+</body>
+</html>
