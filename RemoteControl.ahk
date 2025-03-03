@@ -1,42 +1,79 @@
-// AHK v2 script using .NET’s HttpListener for a simple HTTP server
-// This script binds to the IP 192.168.200.100 on port 8080
+#Requires AutoHotkey v2.0
+#SingleInstance Force
 
-listener := ComObjCreate("System.Net.HttpListener")
-listener.Prefixes.Add("http://192.168.200.100:8080/")
-listener.Start()
-MsgBox("HTTP server started on http://192.168.200.100:8080/")
+; Initialize Winsock
+wsaData := Buffer(394)
+if (DllCall("Ws2_32\WSAStartup", "ushort", 0x202, "ptr", wsaData)) {
+    MsgBox "WSAStartup failed. Error: " A_LastError
+    ExitApp
+}
 
-encoding := ComObjCall("System.Text.Encoding", "UTF8")
+; Create socket
+s := DllCall("Ws2_32\socket", "int", 2, "int", 1, "int", 6, "ptr")
+if (s = -1) {
+    MsgBox "Socket creation failed. Error: " DllCall("Ws2_32\WSAGetLastError")
+    ExitApp
+}
 
-while true {
-    context := listener.GetContext()  ; Wait for a request
-    req := context.Request
-    res := context.Response
-    path := req.Url.AbsolutePath
-    responseText := ""
+; Bind to port 8080
+addr := Buffer(16)
+NumPut("ushort", 2, addr, 0)                     ; AF_INET
+NumPut("ushort", DllCall("Ws2_32\htons", "ushort", 8080, "ushort"), addr, 2)
+NumPut("uint", 0, addr, 4)                       ; INADDR_ANY
 
-    if (path = "/left") {
-         Send("{Left}")
-         responseText := "Left key sent"
-    } else if (path = "/right") {
-         Send("{Right}")
-         responseText := "Right key sent"
-    } else if (path = "/prev") {
-         Send("{PgUp}")
-         responseText := "Previous Episode (Page Up) sent"
-    } else if (path = "/next") {
-         Send("{PgDn}")
-         responseText := "Next Episode (Page Down) sent"
-    } else if (path = "/pause") {
-         Send("{Space}")
-         responseText := "Pause (Space) sent"
-    } else {
-         responseText := "Unknown command"
+if (DllCall("Ws2_32\bind", "ptr", s, "ptr", addr, "int", 16, "int")) {
+    MsgBox "Bind failed. Error: " DllCall("Ws2_32\WSAGetLastError")
+    ExitApp
+}
+
+; Listen for connections
+if (DllCall("Ws2_32\listen", "ptr", s, "int", 5)) {
+    MsgBox "Listen failed. Error: " DllCall("Ws2_32\WSAGetLastError")
+    ExitApp
+}
+
+TrayTip "Web Remote Ready", "Listening on port 8080", 1
+
+Loop {
+    ; Accept connection
+    clientAddr := Buffer(16)
+    addrLen := 16
+    clientSocket := DllCall("Ws2_32\accept", "ptr", s, "ptr", clientAddr, "ptr", addrLen, "ptr")
+    if (clientSocket = -1)
+        continue
+    
+    ; Read request
+    buffer := Buffer(4096)
+    bytesRead := DllCall("Ws2_32\recv", "ptr", clientSocket, "ptr", buffer.Ptr, "int", buffer.Size, "int", 0)
+    if (bytesRead > 0) {
+        ; Use buffer.Ptr with StrGet to read from the buffer memory
+        request := StrGet(buffer.Ptr, bytesRead, "UTF-8")
+        
+        ; Parse path
+        path := ""
+        if (RegExMatch(request, "GET (/\w+)", &match))
+            path := match[1]
+        
+        ; Execute corresponding action
+        switch path {
+            case "/left":   Send "{Left}"
+            case "/right":  Send "{Right}"
+            case "/prev":   Send "{PgUp}"
+            case "/next":   Send "{PgDn}"
+            case "/pause":  Send "{Space}"
+        }
     }
+    
+    ; Send response
+    response := "HTTP/1.1 200 OK`r`n"
+              . "Content-Type: text/plain`r`n"
+              . "Connection: close`r`n`r`n"
+              . "OK"
+    DllCall("Ws2_32\send", "ptr", clientSocket, "astr", response, "int", StrLen(response), "int", 0)
+    DllCall("Ws2_32\closesocket", "ptr", clientSocket)
+}
 
-    buffer := encoding.GetBytes(responseText)
-    res.ContentLength64 := buffer.Length
-    stream := res.OutputStream
-    stream.Write(buffer, 0, buffer.Length)
-    stream.Close()
+OnExit(*) {
+    DllCall("Ws2_32\closesocket", "ptr", s)
+    DllCall("Ws2_32\WSACleanup")
 }
